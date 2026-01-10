@@ -18,8 +18,6 @@ export function LoginPage() {
   const nav = useNavigate();
   const loginAsWorkshop = useAuthStore((s) => s.loginAsWorkshop);
   const loginAsClient = useAuthStore((s) => s.loginAsClient);
-
-  // por ahora: cliente fijo (luego lo conectas a seed)
   const [customerId, setCustomerId] = useState("CUST-001");
 
   return (
