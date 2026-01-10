@@ -7,7 +7,6 @@ export function ProtectedRoute({ allowed }: { allowed: Role[] }) {
 
   if (!role) return <Navigate to="/login" replace />;
   if (!allowed.includes(role)) {
-    // si se mete al lugar equivocado, mándalo a su home
     return <Navigate to={role === "TALLER" ? "/taller/ordenes" : "/cliente/ordenes"} replace />;
   }
 
