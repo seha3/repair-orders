@@ -1,27 +1,42 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
+  Alert,
   Box,
   Button,
   Card,
   CardContent,
   Chip,
   Divider,
-  Stack,
-  Typography,
-  Alert,
   Snackbar,
+  Stack,
   TextField,
+  Typography,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
 } from "@mui/material";
+
 import { getOrderById } from "../../infrastructure/storage/orders.repo";
 import type { RepairOrder } from "../../domain/orders/order.types";
 import { calculateLimit110 } from "../../domain/orders/order.rules";
 import { authorizeOrder, transitionOrder, registerReauthorization } from "../../application/order.usecases";
 
+import {
+  addService,
+  updateServiceEstimated,
+  deleteService,
+  addComponentEstimated,
+  updateComponentEstimated,
+  deleteComponent,
+} from "../../application/services.usecases";
+
 export function WorkshopOrderDetailPage() {
   const { id } = useParams();
   const nav = useNavigate();
 
+  // State hooks
   const [order, setOrder] = useState<RepairOrder | null>(null);
 
   const [snackbar, setSnackbar] = useState<{
@@ -34,6 +49,22 @@ export function WorkshopOrderDetailPage() {
   const [reauthAmount, setReauthAmount] = useState("");
   const [reauthComment, setReauthComment] = useState("");
 
+  // Dialog
+  const [serviceDialogOpen, setServiceDialogOpen] = useState(false);
+  const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
+  const [serviceDraft, setServiceDraft] = useState<{
+    name: string;
+    laborEstimated: string;
+    description: string;
+  }>({ name: "", laborEstimated: "0", description: "" });
+
+  const [componentDialogOpen, setComponentDialogOpen] = useState(false);
+  const [editingComponent, setEditingComponent] = useState<{ serviceId: string; componentId: string } | null>(null);
+  const [componentDraft, setComponentDraft] = useState<{ name: string; estimated: string }>({
+    name: "",
+    estimated: "0",
+  });
+
   useEffect(() => {
     if (!id) return;
     setOrder(getOrderById(id) ?? null);
@@ -44,7 +75,11 @@ export function WorkshopOrderDetailPage() {
     setOrder(getOrderById(id) ?? null);
   };
 
+
+  const canEditServices = order?.status === "CREATED" || order?.status === "DIAGNOSED";
+
   const limit110 = useMemo(() => (order ? calculateLimit110(order.authorizedAmount) : 0), [order]);
+
   const lastEvents = useMemo(() => (order ? order.events.slice(0, 8) : []), [order]);
   const lastErrors = useMemo(() => (order ? order.errors.slice(0, 8) : []), [order]);
 
@@ -60,9 +95,6 @@ export function WorkshopOrderDetailPage() {
       </Box>
     );
   }
-
-  const canStartRepair =
-  order.status === "AUTHORIZED" && order.authorizedAmount > 0;
 
   return (
     <Box sx={{ p: 2 }}>
@@ -161,7 +193,7 @@ export function WorkshopOrderDetailPage() {
                 </Button>
 
                 <Button
-                  disabled={!canStartRepair}
+                  disabled={!(order.status === "AUTHORIZED" && order.authorizedAmount > 0)}
                   variant="outlined"
                   onClick={() => {
                     const res = transitionOrder(order.id, "IN_PROGRESS");
@@ -237,7 +269,7 @@ export function WorkshopOrderDetailPage() {
           </CardContent>
         </Card>
 
-        {/* ✅ CARD 3: Reautorización */}
+        {/* CARD 3: Reautorización (WAITING_FOR_APPROVAL) */}
         {order.status === "WAITING_FOR_APPROVAL" && (
           <Card variant="outlined">
             <CardContent>
@@ -245,7 +277,7 @@ export function WorkshopOrderDetailPage() {
                 <Typography fontWeight={800}>Reautorización</Typography>
 
                 <Typography variant="body2" color="text.secondary">
-                  La orden excedió el límite del 110% y requiere reautorización para continuar.
+                  Esta orden requiere un nuevo monto autorizado para continuar.
                 </Typography>
 
                 <TextField
@@ -268,7 +300,7 @@ export function WorkshopOrderDetailPage() {
                   onClick={() => {
                     const amt = Number(reauthAmount);
                     if (!Number.isFinite(amt) || amt <= 0) {
-                      setSnackbar({ open: true, severity: "error", message: "Ingresa un monto válido mayor a 0." });
+                      setSnackbar({ open: true, severity: "error", message: "Ingresa un monto mayor a 0." });
                       return;
                     }
 
@@ -295,78 +327,198 @@ export function WorkshopOrderDetailPage() {
         {/* CARD 4: Servicios */}
         <Card variant="outlined">
           <CardContent>
-            <Typography fontWeight={800}>Servicios</Typography>
-            {order.services.length === 0 && (
-                <Typography variant="body2" color="text.secondary">
-                    No hay servicios registrados.
-                </Typography>
-                )}
+            <Stack spacing={2}>
+              <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap">
+                <Typography fontWeight={800}>Servicios</Typography>
 
-                {order.services.map((s) => {
-                const labor = s.laborEstimated;
-                const componentsTotal = s.components.reduce((sum, c) => sum + c.estimated, 0);
+                <Button
+                  size="small"
+                  variant="outlined"
+                  disabled={!canEditServices}
+                  onClick={() => {
+                    setEditingServiceId(null);
+                    setServiceDraft({ name: "", laborEstimated: "0", description: "" });
+                    setServiceDialogOpen(true);
+                  }}
+                >
+                  + Agregar servicio
+                </Button>
+              </Stack>
+
+              {!canEditServices && (
+                <Typography variant="body2" color="text.secondary">
+                  Solo se pueden editar en CREATED o DIAGNOSED.
+                </Typography>
+              )}
+
+              {order.services.length === 0 && (
+                <Typography variant="body2" color="text.secondary">
+                  No hay servicios registrados.
+                </Typography>
+              )}
+
+              {order.services.map((s) => {
+                const labor = s.laborEstimated ?? 0;
+                const componentsTotal = s.components.reduce((sum, c) => sum + (c.estimated ?? 0), 0);
                 const serviceTotal = labor + componentsTotal;
 
                 return (
-                    <Card key={s.id} variant="outlined" sx={{ mt: 2 }}>
+                  <Card key={s.id} variant="outlined">
                     <CardContent>
-                        <Stack spacing={1}>
-                        <Typography fontWeight={700}>{s.name}</Typography>
+                      <Stack spacing={1}>
+                        <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap">
+                          <Typography fontWeight={700}>{s.name}</Typography>
 
-                        <Typography variant="body2" color="text.secondary">
-                            {s.description}
-                        </Typography>
+                          <Stack direction="row" spacing={1}>
+                            <Button
+                              size="small"
+                              disabled={!canEditServices}
+                              onClick={() => {
+                                setEditingServiceId(s.id);
+                                setServiceDraft({
+                                  name: s.name,
+                                  laborEstimated: String(s.laborEstimated ?? 0),
+                                  description: s.description ?? "",
+                                });
+                                setServiceDialogOpen(true);
+                              }}
+                            >
+                              Editar
+                            </Button>
 
-                        <Divider />
-
-                        <Stack direction="row" spacing={3}>
-                            <Box>
-                            <Typography variant="caption" color="text.secondary">
-                                Mano de obra
-                            </Typography>
-                            <Typography>{labor.toFixed(2)}</Typography>
-                            </Box>
-
-                            <Box>
-                            <Typography variant="caption" color="text.secondary">
-                                Componentes
-                            </Typography>
-                            <Typography>{componentsTotal.toFixed(2)}</Typography>
-                            </Box>
-
-                            <Box>
-                            <Typography variant="caption" color="text.secondary">
-                                Total servicio
-                            </Typography>
-                            <Typography fontWeight={700}>{serviceTotal.toFixed(2)}</Typography>
-                            </Box>
+                            <Button
+                              size="small"
+                              color="error"
+                              disabled={!canEditServices}
+                              onClick={() => {
+                                const res = deleteService(order.id, s.id);
+                                if (!res.ok) {
+                                  setSnackbar({ open: true, severity: "error", message: res.error.message });
+                                  refresh();
+                                  return;
+                                }
+                                setSnackbar({ open: true, severity: "info", message: "Servicio eliminado." });
+                                refresh();
+                              }}
+                            >
+                              Eliminar
+                            </Button>
+                          </Stack>
                         </Stack>
 
-                        <Divider />
-
-                        <Typography variant="subtitle2">Refacciones</Typography>
-
-                        {s.components.length === 0 && (
-                            <Typography variant="body2" color="text.secondary">
-                            Sin componentes.
-                            </Typography>
+                        {s.description && (
+                          <Typography variant="body2" color="text.secondary">
+                            {s.description}
+                          </Typography>
                         )}
 
-                        {s.components.map((c) => (
-                            <Stack key={c.id} direction="row" justifyContent="space-between">
-                            <Typography variant="body2">{c.name}</Typography>
-                            <Typography variant="body2">{c.estimated.toFixed(2)}</Typography>
-                            </Stack>
-                        ))}
+                        <Divider />
+
+                        <Stack direction={{ xs: "column", sm: "row" }} spacing={3}>
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">
+                              Mano de obra
+                            </Typography>
+                            <Typography>{labor.toFixed(2)}</Typography>
+                          </Box>
+
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">
+                              Componentes
+                            </Typography>
+                            <Typography>{componentsTotal.toFixed(2)}</Typography>
+                          </Box>
+
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">
+                              Total servicio
+                            </Typography>
+                            <Typography fontWeight={700}>{serviceTotal.toFixed(2)}</Typography>
+                          </Box>
                         </Stack>
+
+                        <Divider />
+
+                        <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap">
+                          <Typography variant="subtitle2">Refacciones</Typography>
+
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            disabled={!canEditServices}
+                            onClick={() => {
+                              setEditingComponent({ serviceId: s.id, componentId: "" });
+                              setComponentDraft({ name: "", estimated: "0" });
+                              setComponentDialogOpen(true);
+                            }}
+                          >
+                            + Agregar componente
+                          </Button>
+                        </Stack>
+
+                        {s.components.length === 0 && (
+                          <Typography variant="body2" color="text.secondary">
+                            Sin componentes.
+                          </Typography>
+                        )}
+
+                        <Stack spacing={1}>
+                          {s.components.map((c) => (
+                            <Stack
+                              key={c.id}
+                              direction="row"
+                              justifyContent="space-between"
+                              alignItems="center"
+                              spacing={2}
+                            >
+                              <Typography variant="body2">{c.name}</Typography>
+
+                              <Stack direction="row" spacing={1} alignItems="center">
+                                <Typography variant="body2">{(c.estimated ?? 0).toFixed(2)}</Typography>
+
+                                <Button
+                                  size="small"
+                                  disabled={!canEditServices}
+                                  onClick={() => {
+                                    setEditingComponent({ serviceId: s.id, componentId: c.id });
+                                    setComponentDraft({ name: c.name, estimated: String(c.estimated ?? 0) });
+                                    setComponentDialogOpen(true);
+                                  }}
+                                >
+                                  Editar
+                                </Button>
+
+                                <Button
+                                  size="small"
+                                  color="error"
+                                  disabled={!canEditServices}
+                                  onClick={() => {
+                                    const res = deleteComponent(order.id, s.id, c.id);
+                                    if (!res.ok) {
+                                      setSnackbar({ open: true, severity: "error", message: res.error.message });
+                                      refresh();
+                                      return;
+                                    }
+                                    setSnackbar({ open: true, severity: "info", message: "Componente eliminado." });
+                                    refresh();
+                                  }}
+                                >
+                                  X
+                                </Button>
+                              </Stack>
+                            </Stack>
+                          ))}
+                        </Stack>
+                      </Stack>
                     </CardContent>
-                    </Card>
+                  </Card>
                 );
-                })}
+              })}
+            </Stack>
           </CardContent>
         </Card>
 
-        {/* CARD 5: Historial y errores */}
+        {/* CARD 5: Historial */}
         <Card variant="outlined">
           <CardContent>
             <Typography fontWeight={800}>Historial y errores</Typography>
@@ -406,7 +558,128 @@ export function WorkshopOrderDetailPage() {
         </Card>
       </Stack>
 
-      {/* SNACKBAR */}
+      {/* Dialog Servicio */}
+      <Dialog open={serviceDialogOpen} onClose={() => setServiceDialogOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>{editingServiceId ? "Editar servicio" : "Agregar servicio"}</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField
+              label="Nombre"
+              value={serviceDraft.name}
+              onChange={(e) => setServiceDraft((d) => ({ ...d, name: e.target.value }))}
+            />
+            <TextField
+              label="Descripción (opcional)"
+              value={serviceDraft.description}
+              onChange={(e) => setServiceDraft((d) => ({ ...d, description: e.target.value }))}
+            />
+            <TextField
+              label="Mano de obra estimada"
+              inputMode="decimal"
+              value={serviceDraft.laborEstimated}
+              onChange={(e) => setServiceDraft((d) => ({ ...d, laborEstimated: e.target.value }))}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setServiceDialogOpen(false)}>Cancelar</Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              const labor = Number(serviceDraft.laborEstimated);
+              if (!Number.isFinite(labor) || labor < 0) {
+                setSnackbar({ open: true, severity: "error", message: "Mano de obra inválida." });
+                return;
+              }
+
+              const res = editingServiceId
+                ? updateServiceEstimated(order.id, editingServiceId, {
+                    name: serviceDraft.name,
+                    description: serviceDraft.description,
+                    laborEstimated: labor,
+                  })
+                : addService(order.id, {
+                    name: serviceDraft.name,
+                    description: serviceDraft.description,
+                    laborEstimated: labor,
+                  });
+
+              if (!res.ok) {
+                setSnackbar({ open: true, severity: "error", message: res.error.message });
+                refresh();
+                return;
+              }
+
+              setSnackbar({ open: true, severity: "success", message: "Servicio guardado." });
+              setServiceDialogOpen(false);
+              refresh();
+            }}
+          >
+            Guardar
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog Componente */}
+      <Dialog open={componentDialogOpen} onClose={() => setComponentDialogOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>{editingComponent?.componentId ? "Editar componente" : "Agregar componente"}</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField
+              label="Nombre"
+              value={componentDraft.name}
+              onChange={(e) => setComponentDraft((d) => ({ ...d, name: e.target.value }))}
+            />
+            <TextField
+              label="Costo estimado"
+              inputMode="decimal"
+              value={componentDraft.estimated}
+              onChange={(e) => setComponentDraft((d) => ({ ...d, estimated: e.target.value }))}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setComponentDialogOpen(false)}>Cancelar</Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              if (!editingComponent) return;
+
+              const estimated = Number(componentDraft.estimated);
+              if (!Number.isFinite(estimated) || estimated < 0) {
+                setSnackbar({ open: true, severity: "error", message: "Costo estimado inválido." });
+                return;
+              }
+
+              const isEdit = Boolean(editingComponent.componentId);
+
+              const res = isEdit
+                ? updateComponentEstimated(order.id, editingComponent.serviceId, editingComponent.componentId, {
+                    name: componentDraft.name,
+                    estimated,
+                  })
+                : addComponentEstimated(order.id, editingComponent.serviceId, {
+                    name: componentDraft.name,
+                    estimated,
+                  });
+
+              if (!res.ok) {
+                setSnackbar({ open: true, severity: "error", message: res.error.message });
+                refresh();
+                return;
+              }
+
+              setSnackbar({ open: true, severity: "success", message: "Componente guardado." });
+              setComponentDialogOpen(false);
+              refresh();
+            }}
+          >
+            Guardar
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+
       <Snackbar
         open={snackbar.open}
         autoHideDuration={4000}
