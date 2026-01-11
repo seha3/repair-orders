@@ -2,6 +2,8 @@ import { makeId } from "../../domain/shared/id";
 import type { Customer } from "../../domain/customers/customer.types";
 import type { Vehicle } from "../../domain/vehicles/vehicle.types";
 import type { RepairOrder, OrderEventType, Service } from "../../domain/orders/order.types";
+import { calculateAuthorizedAmount, calculateSubtotalEstimated } from "../../domain/orders/order.rules";
+
 
 export function createSeedState() {
   const customers: Customer[] = [
@@ -66,6 +68,10 @@ export function createSeedState() {
   ].map((o) => {
     const orderInternalId = o.id;
 
+    const services = o.status === "DIAGNOSED" ? [makeService(orderInternalId)] : o.services;
+    const subtotalEstimated = services.length > 0 ? calculateSubtotalEstimated({ ...o, services }) : o.subtotalEstimated;
+    const authorizedAmount = services.length > 0 ? calculateAuthorizedAmount(subtotalEstimated) : o.authorizedAmount;
+
     const createdEvent = {
       id: makeId("evt"),
       orderId: orderInternalId,
@@ -73,11 +79,11 @@ export function createSeedState() {
       timestamp: new Date().toISOString(),
     };
 
-    const services = o.status === "DIAGNOSED" ? [makeService(orderInternalId)] : o.services;
-
     return {
       ...o,
       services,
+      subtotalEstimated,
+      authorizedAmount,
       events: [createdEvent],
     };
   });

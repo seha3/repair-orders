@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Box,
   Chip,
@@ -15,6 +16,7 @@ import {
   TableCell,
   TableBody,
   Paper,
+  Button
 } from "@mui/material";
 import type { SelectChangeEvent } from "@mui/material/Select";
 import { listOrders } from "../../application/order.usecases";
@@ -36,6 +38,7 @@ export function WorkshopOrdersPage() {
   const [orders, setOrders] = useState<RepairOrder[]>([]);
   const [status, setStatus] = useState<(typeof statusOptions)[number]>("ALL");
   const [q, setQ] = useState("");
+  const nav = useNavigate();
 
   useEffect(() => {
     const res = listOrders();
@@ -94,8 +97,10 @@ export function WorkshopOrdersPage() {
                 <TableCell align="right">Autorizado</TableCell>
                 <TableCell align="right">Real</TableCell>
                 <TableCell>Origen</TableCell>
+                <TableCell align="right">Detalle</TableCell>
               </TableRow>
             </TableHead>
+
             <TableBody>
               {filtered.map((o) => (
                 <TableRow key={o.id} hover>
@@ -106,12 +111,22 @@ export function WorkshopOrdersPage() {
                   <TableCell align="right">{o.authorizedAmount.toFixed(2)}</TableCell>
                   <TableCell align="right">{o.realTotal.toFixed(2)}</TableCell>
                   <TableCell>{o.source}</TableCell>
+
+                  <TableCell align="right">
+                    <Button
+                      size="small"
+                      onClick={() => nav(`/taller/ordenes/${o.id}`)}
+                    >
+                      Ver detalle
+                    </Button>
+                  </TableCell>
                 </TableRow>
+
               ))}
 
               {filtered.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5}>
+                  <TableCell colSpan={6}>
                     <Typography variant="body2" color="text.secondary">
                       No hay órdenes que coincidan con el filtro/búsqueda.
                     </Typography>

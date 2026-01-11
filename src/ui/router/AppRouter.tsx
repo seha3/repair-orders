@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { LoginPage } from "../auth/LoginPage";
 import { ProtectedRoute } from "./ProtectedRoute";
 import { WorkshopOrdersPage } from "../workshop/WorkshopOrdersPage";
+import { WorkshopOrderDetailPage } from "../workshop/WorkshopOrderDetailPage";
 import { ClientOrdersPage } from "../client/ClientOrdersPage";
 import { ClientOrderDetailPage } from "../client/ClientOrderDetailPage";
 
@@ -15,6 +16,7 @@ export function AppRouter() {
 
       <Route element={<ProtectedRoute allowed={["TALLER"]} />}>
         <Route path="/taller/ordenes" element={<WorkshopOrdersPage />} />
+        <Route path="/taller/ordenes/:id" element={<WorkshopOrderDetailPage />} />
       </Route>
 
       <Route element={<ProtectedRoute allowed={["CLIENTE"]} />}>
