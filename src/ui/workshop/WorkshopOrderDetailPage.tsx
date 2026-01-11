@@ -11,22 +11,28 @@ import {
   Typography,
   Alert,
   Snackbar,
+  TextField,
 } from "@mui/material";
 import { getOrderById } from "../../infrastructure/storage/orders.repo";
 import type { RepairOrder } from "../../domain/orders/order.types";
 import { calculateLimit110 } from "../../domain/orders/order.rules";
-import { authorizeOrder, transitionOrder } from "../../application/order.usecases";
+import { authorizeOrder, transitionOrder, registerReauthorization } from "../../application/order.usecases";
 
 export function WorkshopOrderDetailPage() {
   const { id } = useParams();
   const nav = useNavigate();
 
   const [order, setOrder] = useState<RepairOrder | null>(null);
+
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
     message: string;
     severity: "error" | "success" | "info";
   }>({ open: false, message: "", severity: "info" });
+
+  // ✅ Estados necesarios para la card de reautorización
+  const [reauthAmount, setReauthAmount] = useState("");
+  const [reauthComment, setReauthComment] = useState("");
 
   useEffect(() => {
     if (!id) return;
@@ -38,11 +44,7 @@ export function WorkshopOrderDetailPage() {
     setOrder(getOrderById(id) ?? null);
   };
 
-  const limit110 = useMemo(
-    () => (order ? calculateLimit110(order.authorizedAmount) : 0),
-    [order]
-  );
-
+  const limit110 = useMemo(() => (order ? calculateLimit110(order.authorizedAmount) : 0), [order]);
   const lastEvents = useMemo(() => (order ? order.events.slice(0, 8) : []), [order]);
   const lastErrors = useMemo(() => (order ? order.errors.slice(0, 8) : []), [order]);
 
@@ -58,6 +60,9 @@ export function WorkshopOrderDetailPage() {
       </Box>
     );
   }
+
+  const canStartRepair =
+  order.status === "AUTHORIZED" && order.authorizedAmount > 0;
 
   return (
     <Box sx={{ p: 2 }}>
@@ -156,7 +161,7 @@ export function WorkshopOrderDetailPage() {
                 </Button>
 
                 <Button
-                  disabled={order.status !== "AUTHORIZED"}
+                  disabled={!canStartRepair}
                   variant="outlined"
                   onClick={() => {
                     const res = transitionOrder(order.id, "IN_PROGRESS");
@@ -232,7 +237,62 @@ export function WorkshopOrderDetailPage() {
           </CardContent>
         </Card>
 
-        {/* CARD 3: Servicios (placeholder por ahora) */}
+        {/* ✅ CARD 3: Reautorización */}
+        {order.status === "WAITING_FOR_APPROVAL" && (
+          <Card variant="outlined">
+            <CardContent>
+              <Stack spacing={2}>
+                <Typography fontWeight={800}>Reautorización</Typography>
+
+                <Typography variant="body2" color="text.secondary">
+                  La orden excedió el límite del 110% y requiere reautorización para continuar.
+                </Typography>
+
+                <TextField
+                  label="Nuevo monto autorizado (incluye IVA)"
+                  value={reauthAmount}
+                  onChange={(e) => setReauthAmount(e.target.value)}
+                  inputMode="decimal"
+                />
+
+                <TextField
+                  label="Comentario (opcional)"
+                  value={reauthComment}
+                  onChange={(e) => setReauthComment(e.target.value)}
+                  multiline
+                  minRows={2}
+                />
+
+                <Button
+                  variant="contained"
+                  onClick={() => {
+                    const amt = Number(reauthAmount);
+                    if (!Number.isFinite(amt) || amt <= 0) {
+                      setSnackbar({ open: true, severity: "error", message: "Ingresa un monto válido mayor a 0." });
+                      return;
+                    }
+
+                    const res = registerReauthorization(order.id, amt, reauthComment || undefined);
+                    if (!res.ok) {
+                      setSnackbar({ open: true, severity: "error", message: res.error.message });
+                      refresh();
+                      return;
+                    }
+
+                    setSnackbar({ open: true, severity: "success", message: "Reautorización registrada." });
+                    setReauthAmount("");
+                    setReauthComment("");
+                    refresh();
+                  }}
+                >
+                  Registrar reautorización
+                </Button>
+              </Stack>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* CARD 4: Servicios */}
         <Card variant="outlined">
           <CardContent>
             <Typography fontWeight={800}>Servicios</Typography>
@@ -242,7 +302,7 @@ export function WorkshopOrderDetailPage() {
           </CardContent>
         </Card>
 
-        {/* CARD 4: Historial y errores */}
+        {/* CARD 5: Historial y errores */}
         <Card variant="outlined">
           <CardContent>
             <Typography fontWeight={800}>Historial y errores</Typography>

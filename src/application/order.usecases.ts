@@ -207,3 +207,35 @@ export function clientRequestChanges(orderInternalId: string, comment: string): 
   upsertOrder(next);
   return ok(next);
 }
+
+export function registerReauthorization(orderInternalId: string, amount: number, comment?: string): Result<RepairOrder> {
+  const order = getOrderById(orderInternalId);
+  if (!order) return err("NOT_FOUND", "Orden no encontrada.");
+
+  if (order.status !== "WAITING_FOR_APPROVAL") {
+    return err("INVALID_STATUS_TRANSITION", "Solo se puede reautorizar cuando la orden está en WAITING_FOR_APPROVAL.");
+  }
+
+  const nextAmount = Math.round((amount + Number.EPSILON) * 100) / 100;
+
+  let next: RepairOrder = {
+    ...order,
+    authorizedAmount: nextAmount,
+    authorizations: [
+      {
+        id: makeId("auth"),
+        orderId: order.id,
+        amount: nextAmount,
+        createdAt: nowIso(),
+        comment,
+      },
+      ...order.authorizations,
+    ],
+  };
+
+  next = { ...next, status: "AUTHORIZED" };
+  next = pushEvent(next, "REAUTORIZADA", "WAITING_FOR_APPROVAL", "AUTHORIZED");
+
+  upsertOrder(next);
+  return ok(next);
+}
