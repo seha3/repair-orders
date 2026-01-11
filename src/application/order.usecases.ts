@@ -181,3 +181,29 @@ export function createOrder(params: {
 
   return ok(withEvent);
 }
+
+// client rejects the order
+export function clientReject(orderInternalId: string, reason?: string): Result<RepairOrder> {
+  const order = getOrderById(orderInternalId);
+  if (!order) return err("NOT_FOUND", "Orden no encontrada.");
+
+  let next = pushEvent(order, "CLIENTE_RECHAZO", order.status, order.status);
+
+  if (reason && reason.trim().length > 0) {
+    next = pushError(next, "INVALID_STATUS_TRANSITION", `Cliente rechazó: ${reason.trim()}`);
+  }
+
+  upsertOrder(next);
+  return ok(next);
+}
+
+export function clientRequestChanges(orderInternalId: string, comment: string): Result<RepairOrder> {
+  const order = getOrderById(orderInternalId);
+  if (!order) return err("NOT_FOUND", "Orden no encontrada.");
+
+  let next = pushEvent(order, "CLIENTE_SOLICITO_CAMBIOS", order.status, order.status);
+  next = pushError(next, "INVALID_STATUS_TRANSITION", `Cliente solicita cambios: ${comment.trim()}`);
+
+  upsertOrder(next);
+  return ok(next);
+}

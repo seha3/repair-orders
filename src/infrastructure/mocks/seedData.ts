@@ -1,7 +1,7 @@
 import { makeId } from "../../domain/shared/id";
 import type { Customer } from "../../domain/customers/customer.types";
 import type { Vehicle } from "../../domain/vehicles/vehicle.types";
-import type { RepairOrder, OrderEventType } from "../../domain/orders/order.types";
+import type { RepairOrder, OrderEventType, Service } from "../../domain/orders/order.types";
 
 export function createSeedState() {
   const customers: Customer[] = [
@@ -14,7 +14,35 @@ export function createSeedState() {
     { id: "VEH-002", plate: "XYZ-987", model: "VW Jetta 2016", customerId: "CUST-002" },
   ];
 
-  const baseOrder = (idx: number, status: RepairOrder["status"], customerId: string, vehicleId: string): RepairOrder => ({
+  function makeService(orderInternalId: string): Service {
+    const serviceId = makeId("svc");
+
+    return {
+      id: serviceId,
+      orderId: orderInternalId,
+      name: "Diagnóstico + cambio de aceite",
+      description: "Servicio de ejemplo para permitir autorización",
+      laborEstimated: 500,
+      laborReal: 0,
+      components: [
+        {
+          id: makeId("cmp"),
+          serviceId,
+          name: "Filtro de aceite",
+          description: "Refacción ejemplo",
+          estimated: 250,
+          real: 0,
+        },
+      ],
+    };
+  }
+
+  const baseOrder = (
+    idx: number,
+    status: RepairOrder["status"],
+    customerId: string,
+    vehicleId: string
+  ): RepairOrder => ({
     id: makeId("order"),
     orderId: `RO-${String(idx).padStart(3, "0")}`,
     customerId,
@@ -25,10 +53,7 @@ export function createSeedState() {
     realTotal: 0,
     authorizations: [],
     services: [],
-    events: [{ id: makeId("evt"), orderId: "tmp", type: "ORDEN_CREADA" as OrderEventType, timestamp: new Date().toISOString() }].map(e => ({
-      ...e,
-      orderId: "tmp",
-    })),
+    events: [],
     errors: [],
     source: "TALLER",
   });
@@ -39,10 +64,21 @@ export function createSeedState() {
     baseOrder(3, "WAITING_FOR_APPROVAL", "CUST-002", "VEH-002"),
     baseOrder(4, "CANCELLED", "CUST-002", "VEH-002"),
   ].map((o) => {
-    const orderId = o.id;
+    const orderInternalId = o.id;
+
+    const createdEvent = {
+      id: makeId("evt"),
+      orderId: orderInternalId,
+      type: "ORDEN_CREADA" as OrderEventType,
+      timestamp: new Date().toISOString(),
+    };
+
+    const services = o.status === "DIAGNOSED" ? [makeService(orderInternalId)] : o.services;
+
     return {
       ...o,
-      events: o.events.map((ev) => ({ ...ev, orderId })),
+      services,
+      events: [createdEvent],
     };
   });
 
