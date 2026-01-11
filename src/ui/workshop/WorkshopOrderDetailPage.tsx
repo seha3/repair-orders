@@ -30,7 +30,7 @@ export function WorkshopOrderDetailPage() {
     severity: "error" | "success" | "info";
   }>({ open: false, message: "", severity: "info" });
 
-  // ✅ Estados necesarios para la card de reautorización
+  // Reautorización
   const [reauthAmount, setReauthAmount] = useState("");
   const [reauthComment, setReauthComment] = useState("");
 
@@ -296,9 +296,73 @@ export function WorkshopOrderDetailPage() {
         <Card variant="outlined">
           <CardContent>
             <Typography fontWeight={800}>Servicios</Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-              Placeholder: aquí mostraremos servicios/refacciones y edición cuando aplique (CREATED/DIAGNOSED).
-            </Typography>
+            {order.services.length === 0 && (
+                <Typography variant="body2" color="text.secondary">
+                    No hay servicios registrados.
+                </Typography>
+                )}
+
+                {order.services.map((s) => {
+                const labor = s.laborEstimated;
+                const componentsTotal = s.components.reduce((sum, c) => sum + c.estimated, 0);
+                const serviceTotal = labor + componentsTotal;
+
+                return (
+                    <Card key={s.id} variant="outlined" sx={{ mt: 2 }}>
+                    <CardContent>
+                        <Stack spacing={1}>
+                        <Typography fontWeight={700}>{s.name}</Typography>
+
+                        <Typography variant="body2" color="text.secondary">
+                            {s.description}
+                        </Typography>
+
+                        <Divider />
+
+                        <Stack direction="row" spacing={3}>
+                            <Box>
+                            <Typography variant="caption" color="text.secondary">
+                                Mano de obra
+                            </Typography>
+                            <Typography>{labor.toFixed(2)}</Typography>
+                            </Box>
+
+                            <Box>
+                            <Typography variant="caption" color="text.secondary">
+                                Componentes
+                            </Typography>
+                            <Typography>{componentsTotal.toFixed(2)}</Typography>
+                            </Box>
+
+                            <Box>
+                            <Typography variant="caption" color="text.secondary">
+                                Total servicio
+                            </Typography>
+                            <Typography fontWeight={700}>{serviceTotal.toFixed(2)}</Typography>
+                            </Box>
+                        </Stack>
+
+                        <Divider />
+
+                        <Typography variant="subtitle2">Refacciones</Typography>
+
+                        {s.components.length === 0 && (
+                            <Typography variant="body2" color="text.secondary">
+                            Sin componentes.
+                            </Typography>
+                        )}
+
+                        {s.components.map((c) => (
+                            <Stack key={c.id} direction="row" justifyContent="space-between">
+                            <Typography variant="body2">{c.name}</Typography>
+                            <Typography variant="body2">{c.estimated.toFixed(2)}</Typography>
+                            </Stack>
+                        ))}
+                        </Stack>
+                    </CardContent>
+                    </Card>
+                );
+                })}
           </CardContent>
         </Card>
 
