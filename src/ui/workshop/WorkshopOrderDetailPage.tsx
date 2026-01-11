@@ -17,12 +17,11 @@ import {
   DialogContent,
   DialogTitle,
 } from "@mui/material";
-
 import { getOrderById } from "../../infrastructure/storage/orders.repo";
 import type { RepairOrder } from "../../domain/orders/order.types";
 import { calculateLimit110 } from "../../domain/orders/order.rules";
 import { authorizeOrder, transitionOrder, registerReauthorization } from "../../application/order.usecases";
-
+import { updateLaborReal, updateComponentReal } from "../../application/realcost.usecases";
 import {
   addService,
   updateServiceEstimated,
@@ -176,7 +175,7 @@ export function WorkshopOrderDetailPage() {
                 </Button>
 
                 <Button
-                  disabled={order.status !== "DIAGNOSED"}
+                  disabled={order.status !== "DIAGNOSED" || order.services.length === 0}
                   variant="contained"
                   onClick={() => {
                     const res = authorizeOrder(order.id);
@@ -417,10 +416,42 @@ export function WorkshopOrderDetailPage() {
                         <Stack direction={{ xs: "column", sm: "row" }} spacing={3}>
                           <Box>
                             <Typography variant="caption" color="text.secondary">
-                              Mano de obra
+                                Mano de obra (estimada)
                             </Typography>
                             <Typography>{labor.toFixed(2)}</Typography>
-                          </Box>
+
+                            {order.status === "IN_PROGRESS" && (
+                                <TextField
+                                sx={{ mt: 1 }}
+                                label="Mano de obra real"
+                                size="small"
+                                inputMode="decimal"
+                                key={`laborReal-${s.id}-${s.laborReal ?? 0}`}
+                                defaultValue={String(s.laborReal ?? 0)}
+                                onBlur={(e) => {
+                                    const val = Number(e.target.value);
+                                    if (!Number.isFinite(val) || val < 0) {
+                                    setSnackbar({ open: true, severity: "error", message: "Costo real inválido." });
+                                    return;
+                                    }
+
+                                    const res = updateLaborReal(order.id, s.id, val);
+                                    if (!res.ok) {
+                                    setSnackbar({ open: true, severity: "error", message: res.error.message });
+                                    refresh();
+                                    return;
+                                    }
+
+                                    const msg = res.data.status === "WAITING_FOR_APPROVAL"
+                                        ? "Se ha excedido el límite del 110%."
+                                        : "Costo real actualizado.";
+
+                                    setSnackbar({ open: true, severity: "info", message: msg });
+                                    refresh();
+                                }}
+                                />
+                            )}
+                            </Box>
 
                           <Box>
                             <Typography variant="caption" color="text.secondary">
@@ -476,6 +507,33 @@ export function WorkshopOrderDetailPage() {
                               <Stack direction="row" spacing={1} alignItems="center">
                                 <Typography variant="body2">{(c.estimated ?? 0).toFixed(2)}</Typography>
 
+                                {order.status === "IN_PROGRESS" && (
+                                    <TextField
+                                    label="Real"
+                                    size="small"
+                                    sx={{ width: 100 }}
+                                    inputMode="decimal"
+                                    key={`cmpReal-${c.id}-${c.real ?? 0}`}
+                                    defaultValue={String(c.real ?? 0)}
+                                    onBlur={(e) => {
+                                        const val = Number(e.target.value);
+                                        if (!Number.isFinite(val) || val < 0) {
+                                        setSnackbar({ open: true, severity: "error", message: "Costo real inválido." });
+                                        return;
+                                        }
+
+                                        const res = updateComponentReal(order.id, s.id, c.id, val);
+                                        if (!res.ok) {
+                                        setSnackbar({ open: true, severity: "error", message: res.error.message });
+                                        refresh();
+                                        return;
+                                        }
+
+                                        setSnackbar({ open: true, severity: "info", message: "Costo real actualizado." });
+                                        refresh();
+                                    }}
+                                  />
+                                )}
                                 <Button
                                   size="small"
                                   disabled={!canEditServices}
@@ -506,6 +564,7 @@ export function WorkshopOrderDetailPage() {
                                   X
                                 </Button>
                               </Stack>
+
                             </Stack>
                           ))}
                         </Stack>
