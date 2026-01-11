@@ -3,6 +3,8 @@ import { LoginPage } from "../auth/LoginPage";
 import { ProtectedRoute } from "./ProtectedRoute";
 import { WorkshopOrdersPage } from "../workshop/WorkshopOrdersPage";
 import { ClientOrdersPage } from "../client/ClientOrdersPage";
+import { ClientOrderDetailPage } from "../client/ClientOrderDetailPage";
+
 
 export function AppRouter() {
   return (
@@ -17,6 +19,7 @@ export function AppRouter() {
 
       <Route element={<ProtectedRoute allowed={["CLIENTE"]} />}>
         <Route path="/cliente/ordenes" element={<ClientOrdersPage />} />
+        <Route path="/cliente/ordenes/:id" element={<ClientOrderDetailPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/login" replace />} />
