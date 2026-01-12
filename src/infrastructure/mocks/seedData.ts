@@ -68,7 +68,10 @@ export function createSeedState() {
   ].map((o) => {
     const orderInternalId = o.id;
 
-    const services = o.status === "DIAGNOSED" ? [makeService(orderInternalId)] : o.services;
+    const services =
+      o.status === "DIAGNOSED" || o.status === "WAITING_FOR_APPROVAL"
+        ? [makeService(orderInternalId)]
+        : o.services;
     const subtotalEstimated = services.length > 0 ? calculateSubtotalEstimated({ ...o, services }) : o.subtotalEstimated;
     const authorizedAmount = services.length > 0 ? calculateAuthorizedAmount(subtotalEstimated) : o.authorizedAmount;
 

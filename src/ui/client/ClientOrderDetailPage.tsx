@@ -45,6 +45,11 @@ export function ClientOrderDetailPage() {
 
   const lastEvents = useMemo(() => (order ? order.events.slice(0, 6) : []), [order]);
   const lastErrors = useMemo(() => (order ? order.errors.slice(0, 6) : []), [order]);
+  const lastReauthEvent = useMemo(() => {
+    if (!order) return null;
+    return order.events.find((e) => e.type === "REAUTORIZADA") ?? null;
+  }, [order]);
+
 
   if (!order) {
     return (
@@ -109,6 +114,40 @@ export function ClientOrderDetailPage() {
           </CardContent>
         </Card>
 
+        {order.status === "WAITING_FOR_APPROVAL" && (
+          <Card variant="outlined">
+            <CardContent>
+              <Stack spacing={1}>
+                <Typography fontWeight={800}>Reautorización solicitada</Typography>
+
+                <Typography variant="body2" color="text.secondary">
+                  El taller registró un nuevo monto autorizado para continuar con la reparación.
+                </Typography>
+
+                <Divider sx={{ my: 1 }} />
+
+                <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Total real</Typography>
+                    <Typography fontWeight={700}>{order.realTotal.toFixed(2)}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Nuevo monto autorizado</Typography>
+                    <Typography fontWeight={700}>{order.authorizedAmount.toFixed(2)}</Typography>
+                  </Box>
+                </Stack>
+
+                {lastReauthEvent && (
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                    Evento: {lastReauthEvent.type} — {new Date(lastReauthEvent.timestamp).toLocaleString()}
+                  </Typography>
+                )}
+              </Stack>
+            </CardContent>
+          </Card>
+        )}
+
+
         <Card variant="outlined">
           <CardContent>
             <Stack spacing={2}>
@@ -145,20 +184,22 @@ export function ClientOrderDetailPage() {
                 <Button
                   variant="contained"
                   onClick={() => {
-                    const res = transitionOrder(order.id, "AUTHORIZED");
-                    if (!res.ok) {
+                    const hasReauth = order.events.some((e) => e.type === "REAUTORIZADA");
+                    if (!hasReauth) {
                       setSnackbar({
                         open: true,
                         severity: "error",
-                        message: res.error.message,
+                        message: "Aún no hay una reautorización registrada por el taller.",
                       });
                       return;
                     }
-                    setSnackbar({
-                      open: true,
-                      severity: "success",
-                      message: "Reautorización aceptada correctamente.",
-                    });
+
+                    const res = transitionOrder(order.id, "AUTHORIZED");
+                    if (!res.ok) {
+                      setSnackbar({ open: true, severity: "error", message: res.error.message });
+                      return;
+                    }
+                    setSnackbar({ open: true, severity: "success", message: "Reautorización aceptada correctamente." });
                     refresh();
                   }}
                 >

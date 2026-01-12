@@ -145,7 +145,7 @@ export function recalcRealAndCheckOvercost(orderInternalId: string): Result<Repa
   if (order.authorizedAmount > 0 && realTotal > limit) {
     next = { ...next, status: "WAITING_FOR_APPROVAL" };
     next = pushError(next, "REQUIRES_REAUTH", "Se excedió el 110%. Requiere reautorización.");
-    next = pushEvent(next, "REAUTORIZADA", order.status, "WAITING_FOR_APPROVAL");
+    // next = pushEvent(next, "REAUTORIZADA", order.status, "WAITING_FOR_APPROVAL");
   }
 
   upsertOrder(next);
